@@ -317,8 +317,7 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
         table.remove_class(%w[overflow-hidden])
         table.add_class(%w[overflow-auto])
 
-        if (div = doc.at_css('.pointer-events-none')) &&
-            div.classes.include?('lg:hidden') &&
+        if (div = doc.at_css('.pointer-events-none.lg\\:hidden')) &&
             div.at_xpath('.//button[starts-with(normalize-space(.), "Show")]')
           div.remove
         end
