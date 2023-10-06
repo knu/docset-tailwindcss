@@ -12,5 +12,7 @@
 	<true/>
 	<key>DashDocSetFamily</key>
 	<string>dashtoc</string>
+	<key>DashDocSetPlayURL</key>
+	<string>https://play.tailwindcss.com/</string>
 </dict>
 </plist>
