@@ -92,12 +92,10 @@ FILE_SUFFIXES = [
 ]
 
 def extract_version
-  cd DOCS_ROOT do
-    Dir.glob("#{HOST_URI.route_to(DOCS_URI)}index.html") { |path|
-      doc = Nokogiri::HTML5(File.read(path), path)
-      return doc.at_css('.sticky.top-0')&.at_xpath('.//button[starts-with(., "v")]')&.text&.slice(/\Av\K\d[\d.]*/)
-    }
-  end
+  Dir.glob("#{DOCS_DIR}/docs/index.html") { |path|
+    doc = Nokogiri::HTML5(File.read(path), path)
+    return doc.at_css('.sticky.top-0')&.at_xpath('.//button[starts-with(., "v")]')&.text&.slice(/\Av\K\d[\d.]*/)
+  }
 
   nil
 end
