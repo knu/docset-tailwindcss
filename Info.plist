@@ -10,8 +10,6 @@
 	<string>twcss</string>
 	<key>isDashDocset</key>
 	<true/>
-	<key>DashDocSetFallbackURL</key>
-	<string>https://tailwindcss.com/docs/</string>
 	<key>DashDocSetFamily</key>
 	<string>dashtoc</string>
 </dict>

@@ -284,8 +284,10 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
     Dir.glob("#{HOST_URI.route_to(DOCS_URI)}**/*.html") { |path|
       next if File.symlink?(path)
 
-      uri = HOST_URI + path
+      uri = HOST_URI + path.chomp('.html')
       doc = Nokogiri::HTML5(File.read(path), path)
+
+      doc.at_css('html').prepend_child(Nokogiri::XML::Comment.new(doc, " Online page at #{uri} "))
 
       doc.xpath('//meta[not(@charset or @name = "viewport")] | //script | //link[not(@rel="stylesheet")]').each(&:remove)
 
