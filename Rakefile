@@ -85,6 +85,7 @@ URI_ATTRS = [
   ['img', 'src'],
   ['link', 'href'],
   ['script', 'src'],
+  ['iframe', 'src'],
 ]
 FILE_SUFFIXES = [
   '',
