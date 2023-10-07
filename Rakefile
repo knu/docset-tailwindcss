@@ -231,12 +231,18 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
       a['name'] = id
       a['class'] = 'dashAnchor'
     }
-    case node.name
-    when 'table', 'tr'
-      (node.at_css('th, td') || ndoe).prepend_child(a)
-    else
-      node.prepend_child(a)
+    a_parent =
+      case node.name
+      when 'table', 'tr'
+        node.at_css('th, td')
+      end || node
+
+    if a_parent.at_xpath("./ancestor::table//th[contains(concat(' ', @class, ' '), ' sticky ')]")
+      a.add_class('below-sticky-table-header')
     end
+
+    a_parent.prepend_child(a)
+
     url = "#{path}\##{id}"
     insert.execute(name, type, url)
   }
@@ -287,7 +293,11 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
       uri = HOST_URI + path.chomp('.html')
       doc = Nokogiri::HTML5(File.read(path), path)
 
-      doc.at_css('html').prepend_child(Nokogiri::XML::Comment.new(doc, " Online page at #{uri} "))
+      doc.at_css('html').then do |html|
+        html.remove_class(html.classes.grep(/(?:\A|:)\[--scroll-mt:/))
+
+        html.prepend_child(Nokogiri::XML::Comment.new(doc, " Online page at #{uri} "))
+      end
 
       doc.xpath('//meta[not(@charset or @name = "viewport")] | //script | //link[not(@rel="stylesheet")]').each(&:remove)
 
