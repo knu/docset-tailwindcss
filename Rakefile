@@ -2,6 +2,7 @@
 require 'bundler/setup'
 Bundler.require
 
+require 'digest'
 require 'json'
 require 'pathname'
 require 'set'
@@ -165,8 +166,6 @@ namespace :fetch do
         end
       end
     }
-
-    ln_s "index.html", "#{DOCS_DIR}/docs/installation.html"
   end
 
   task :icon do
@@ -247,6 +246,8 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
     insert.execute(name, type, url)
   }
 
+  bad_hrefs = Set[]
+
   resolve_url = ->(href, uri) {
     begin
       case abs = uri + href
@@ -284,11 +285,16 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
 
   cp COMMON_CSS, File.join(DOCS_ROOT, HOST_URI.route_to(DOCS_URI).to_s)
 
-  bad_hrefs = Set[]
-
   cd DOCS_ROOT do
-    Dir.glob("#{HOST_URI.route_to(DOCS_URI)}**/*.html") { |path|
-      next if File.symlink?(path)
+    sha1sums = {}
+
+    Dir.glob("#{HOST_URI.route_to(DOCS_URI)}**/*.html", sort: true) { |path|
+      sha1sum = Digest::SHA1.file(path).hexdigest
+      if existent = sha1sums[sha1sum]
+        ln_sf Pathname(existent).relative_path_from(File.dirname(path)), path
+        next
+      end
+      sha1sums[sha1sum] = path
 
       uri = HOST_URI + path.chomp('.html')
       doc = Nokogiri::HTML5(File.read(path), path)
