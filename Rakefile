@@ -88,7 +88,6 @@ URI_ATTRS = [
 ]
 FILE_SUFFIXES = [
   '',
-  '/index.html',
   '.html'
 ]
 
