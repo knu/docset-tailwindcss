@@ -78,7 +78,7 @@ DUC_REPO = "git@github.com:#{DUC_OWNER}/Dash-User-Contributions.git"
 DUC_OWNER_UPSTREAM = 'Kapeli'
 DUC_REPO_UPSTREAM = "https://github.com/#{DUC_OWNER_UPSTREAM}/Dash-User-Contributions.git"
 DUC_WORKDIR = File.basename(DUC_REPO, '.git')
-DUC_BRANCH = 'bigquery'
+DUC_BRANCH = 'tailwindcss'
 
 URI_ATTRS = [
   ['a', 'href'],
