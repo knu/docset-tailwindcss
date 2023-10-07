@@ -91,27 +91,84 @@ FILE_SUFFIXES = [
   '.html'
 ]
 
-def extract_version
-  Dir.glob("#{DOCS_DIR}/docs/index.html") { |path|
-    doc = Nokogiri::HTML5(File.read(path), path)
-    return doc.at_css('.sticky.top-0')&.at_xpath('.//button[starts-with(., "v")]')&.text&.slice(/\Av\K\d[\d.]*/)
-  }
+class DocsetVersion < Data.define(:version, :build_id, :revision, :compare_key)
+  include Comparable
 
-  nil
+  def self.parse(json)
+    new(**JSON.parse(json, symbolize_names: true))
+  end
+
+  def self.load(path)
+    parse(File.read(path))
+  end
+
+  def dump(path)
+    File.open(path, "w") do |f|
+      f.puts JSON.pretty_generate(self)
+    end
+  end
+
+  def initialize(version:, build_id:, revision:)
+    super(version:, build_id:, revision:, compare_key: [Gem::Version.new(version), revision])
+  end
+
+  def <=>(other)
+    compare_key <=> other.compare_key
+  end
+
+  def to_json(...)
+    {
+      version: version,
+      build_id: build_id,
+      revision: revision,
+    }.to_json(...)
+  end
+
+  def docset_version
+    "#{version}-#{revision}"
+  end
 end
 
-def current_version
-  ENV['BUILD_VERSION'] || extract_version()
+def all_versions
+  Pathname.glob("versions/*/#{DOCSET}/version.json").map { |file|
+    DocsetVersion.load(file)
+  }.sort
+end
+
+def build_version_info
+  doc = Nokogiri::HTML5(File.read("#{DOCS_DIR}/docs/index.html"))
+  dl_version = Gem::Version.new(doc.at_css('.sticky.top-0').at_xpath('.//button[starts-with(., "v")]').text[/\Av\K\d[\d.]*/])
+  dl_build_id = JSON.parse(doc.at("#__NEXT_DATA__").text)["buildId"] or raise 'buildId not found'
+
+  revision = ENV['BUILD_REVISION']&.to_i ||
+    case all_versions.take_while { |version_info| version_info.version <= dl_version }.max
+    in nil
+      0
+    in { version:, build_id:, revision: }
+      case
+      when version < dl_version
+        0
+      when build_id == dl_build_id
+        revision
+      else
+        revision + 1
+      end
+    else
+      0
+    end
+
+  DocsetVersion.new(version: dl_version.to_s, build_id: dl_build_id, revision:)
 end
 
 def previous_version
-  ENV['PREVIOUS_VERSION'] || Gem::Version.new(current_version).then { |current_version|
-    Pathname.glob("versions/*/#{DOCSET}").map { |path|
-      Gem::Version.new(path.parent.basename.to_s)
-    }.select { |version|
-      version < current_version
-    }.max&.to_s
-  }
+  ENV['PREVIOUS_VERSION'] ||
+    begin
+      current_version_info = DocsetVersion.parse(File.read(File.join(built_docset, "version.json")))
+
+      all_versions.reverse_each.find { |version_info|
+        version_info < current_version_info
+      }&.docset_version
+    end
 end
 
 def previous_docset
@@ -121,7 +178,7 @@ def previous_docset
 end
 
 def built_docset
-  if version = ENV['BUILD_VERSION']
+  if version = ENV['CURRENT_VERSION']
     "versions/#{version}/#{DOCSET}"
   else
     DOCSET
@@ -203,9 +260,13 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
 
   cp_r DOCS_DIR.to_s + '/.', DOCS_ROOT
 
-  version = extract_version or raise "Version unknown"
+  version_info = build_version_info
+  version = version_info.docset_version
+  build_id = version_info.build_id
 
-  puts "Generating docset for #{DOCSET_NAME} #{version}"
+  puts "Generating docset for #{DOCSET_NAME} #{version} (#{build_id})"
+
+  version_info.dump(File.join(DOCSET, "version.json"))
 
   # Index
   db = SQLite3::Database.new(DOCS_INDEX)
@@ -470,7 +531,7 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
   mkdir_p "versions/#{version}/#{DOCSET}"
   sh 'rsync', '-a', '--exclude=.DS_Store', '--delete', "#{DOCSET}/", "versions/#{version}/#{DOCSET}/"
 
-  puts "Finished creating #{DOCSET} #{version}"
+  puts "Finished creating #{DOCSET} #{version} (#{build_id})"
 
   system paginate_command('rake diff:index', diff: true)
 end
@@ -533,7 +594,8 @@ end
 
 desc 'Push the generated docset if there is an update'
 task :push => DUC_WORKDIR do
-  version = extract_version
+  version_info = build_version_info
+  version = version_info.docset_version
   workdir = Pathname(DUC_WORKDIR) / 'docsets' / File.basename(DOCSET, '.docset')
 
   docset_json = workdir / 'docset.json'
