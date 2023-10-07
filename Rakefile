@@ -348,7 +348,7 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
   cd DOCS_ROOT do
     sha1sums = {}
 
-    Dir.glob("#{HOST_URI.route_to(DOCS_URI)}**/*.html", sort: true) { |path|
+    Dir.glob("**/*.html", sort: true) { |path|
       sha1sum = Digest::SHA1.file(path).hexdigest
       if existent = sha1sums[sha1sum]
         ln_sf Pathname(existent).relative_path_from(File.dirname(path)), path
