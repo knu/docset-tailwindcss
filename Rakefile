@@ -284,7 +284,12 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
     INSERT OR IGNORE INTO searchIndex(name, type, path) VALUES (?, ?, ?);
   SQL
 
+  index_count = 0
+
   index_item = ->(path, node, type, name) {
+    index_count += 1
+    print "Indexing #{index_count} items\r" if index_count % 10 == 0
+
     id = '//apple_ref/cpp/%s/%s' % [type, name].map { |s|
       URI.encode_www_form_component(s).gsub('+', '%20')
     }
