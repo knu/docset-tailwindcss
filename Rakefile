@@ -260,6 +260,7 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
   cp ICON_FILE, DOCSET
 
   cp_r DOCS_DIR.to_s + '/.', DOCS_ROOT
+  rm_rf File.join(DOCS_ROOT, '_next/static/chunks')
 
   version_info = build_version_info
   version = version_info.docset_version
