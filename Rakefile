@@ -356,6 +356,8 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
       end
       sha1sums[sha1sum] = path
 
+      puts "Indexing #{path}"
+
       uri = HOST_URI + path.chomp('.html')
       doc = Nokogiri::HTML5(File.read(path), path)
 
