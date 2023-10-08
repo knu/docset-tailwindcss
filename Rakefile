@@ -1,11 +1,11 @@
 # frozen_string_literal: true
+
 require 'bundler/setup'
 Bundler.require
 
 require 'digest'
 require 'json'
 require 'pathname'
-require 'set'
 require 'tempfile'
 require 'time'
 require 'uri'
@@ -119,9 +119,9 @@ class DocsetVersion < Data.define(:version, :build_id, :revision, :compare_key)
 
   def to_json(...)
     {
-      version: version,
-      build_id: build_id,
-      revision: revision,
+      version:,
+      build_id:,
+      revision:,
     }.to_json(...)
   end
 
@@ -210,7 +210,7 @@ namespace :fetch do
       #{DOCS_URI}
     ]
 
-    Dir.glob("#{DOCS_DIR}/**/*") { |path|
+    Dir.glob("#{DOCS_DIR}/**/*") do |path|
       next unless File.file?(path)
 
       if !path.end_with?('.html') &&
@@ -222,7 +222,7 @@ namespace :fetch do
           mv path, path_with_suffix
         end
       end
-    }
+    end
   end
 
   task :icon do
@@ -292,7 +292,7 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
 
   index_count = 0
 
-  index_item = ->(path, node, type, name) {
+  index_item = ->(path, node, type, name) do
     index_count += 1
     print "Indexing #{index_count} items\r" if index_count % 100 == 0
 
@@ -317,11 +317,11 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
 
     url = "#{path}\##{id}"
     insert.execute(name, type, url)
-  }
+  end
 
   bad_hrefs = Set[]
 
-  resolve_url = ->(href, uri) {
+  resolve_url = ->(href, uri) do
     begin
       case abs = uri + href
       when URI::HTTP
@@ -342,6 +342,7 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
     if rel.host
       return abs
     end
+
     localpath = rel.path.chomp('/')
     FILE_SUFFIXES.each do |suffix|
       if File.file?(localpath + suffix)
@@ -351,7 +352,7 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
     end
 
     abs
-  }
+  end
 
   puts 'Indexing documents'
 
@@ -360,7 +361,7 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
   cd DOCS_ROOT do
     sha1sums = {}
 
-    Dir.glob("**/*.html", sort: true) { |path|
+    Dir.glob("**/*.html", sort: true) do |path|
       sha1sum = Digest::SHA1.file(path).hexdigest
       if existent = sha1sums[sha1sum]
         ln_sf Pathname(existent).relative_path_from(File.dirname(path)), path
@@ -504,9 +505,9 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
       end
 
       File.write(path, doc.to_s)
-    }
+    end
 
-    Dir.glob("**/*.css") { |path|
+    Dir.glob("**/*.css") do |path|
       uri = HOST_URI + path
 
       File.write(
@@ -515,7 +516,7 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
           resolve_url.(href, uri)
         }
       )
-    }
+    end
   end
 
   insert.close
@@ -563,11 +564,11 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
     ],
     'Function' => ['theme()', 'screen()'],
     'Directive' => ['@tailwind', '@apply'],
-  }.each { |type, names|
-    names.each { |name|
+  }.each do |type, names|
+    names.each do |name|
       assert_exists.(name: name, type: type)
-    }
-  }
+    end
+  end
 
   db.close
 
@@ -620,10 +621,10 @@ namespace :diff do
 
     puts "Diff in document files:"
     sh 'diff', '-rNU3',
-      '-x', '*.js',
-      '-x', '*.css',
-      '-x', '*.svg',
-      old_root, DOCS_ROOT do
+       '-x', '*.js',
+       '-x', '*.css',
+       '-x', '*.svg',
+       old_root, DOCS_ROOT do
       # ignore status
     end
   end
@@ -650,7 +651,7 @@ task :push => DUC_WORKDIR do
   puts "Resetting the working directory"
   cd workdir.to_s do
     sh 'git', 'remote', 'update'
-    sh 'git', 'rev-parse', '--verify', '--quiet', DUC_BRANCH do |ok, |
+    sh 'git', 'rev-parse', '--verify', '--quiet', DUC_BRANCH do |ok,|
       if ok
         sh 'git', 'checkout', DUC_BRANCH
         sh 'git', 'reset', '--hard', 'upstream/master'
