@@ -288,7 +288,7 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
 
   index_item = ->(path, node, type, name) {
     index_count += 1
-    print "Indexing #{index_count} items\r" if index_count % 10 == 0
+    print "Indexing #{index_count} items\r" if index_count % 100 == 0
 
     id = '//apple_ref/cpp/%s/%s' % [type, name].map { |s|
       URI.encode_www_form_component(s).gsub('+', '%20')
@@ -328,8 +328,7 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
       when /\Adata:/
         return href
       end
-      p [:error, href]
-      warn "#{e.message} in #{path}" if bad_hrefs.add?(href)
+      warn e.message if bad_hrefs.add?(href)
       return href
     end
 
