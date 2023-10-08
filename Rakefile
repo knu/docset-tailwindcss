@@ -284,6 +284,12 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
     INSERT OR IGNORE INTO searchIndex(name, type, path) VALUES (?, ?, ?);
   SQL
 
+  get_count = ->(type:, name:, path: nil) do
+    db.get_first_value(<<~SQL, type, name, *([path, "#{path}#%"] if path))
+      SELECT COUNT(*) FROM searchIndex WHERE type = ? AND name = ?#{' AND (path = ? OR path LIKE ?)' if path};
+    SQL
+  end
+
   index_count = 0
 
   index_item = ->(path, node, type, name) {
@@ -429,7 +435,12 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
           in { modifier:, media_query: }
             # covered by Pseudo-class reference
           in { modifier:, css: }
-            index_item.(path, el, 'Modifier', "#{modifier}:")
+            case modifier
+            when /\A([-\w]+-)\[/
+              index_item.(path, el, 'Modifier', $1)
+            else
+              index_item.(path, el, 'Modifier', "#{modifier}:")
+            end
             css.scan(/^\s*(([^\s:]+):\s+[^\n]+);/) do |property, property_name|
               index_item.(path, el, 'Property', property_name)
               index_item.(path, el, 'Property', property)
@@ -450,8 +461,8 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
         end
       end
 
-      case File.basename(path)
-      when 'functions-and-directives.html'
+      case path
+      when 'docs/functions-and-directives.html'
         type = nil
         doc.css('h2, h3').each do |el|
           case el.name
@@ -465,6 +476,28 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
           when 'h3'
             if type
               index_item.(path, el, type, el.text)
+            end
+          end
+        end
+      when 'docs/dark-mode.html', 'docs/hover-focus-and-other-states.html', 'docs/typography-plugin.html'
+        doc.xpath(<<~XPATH).each do |code|
+          //code[(starts-with(./following::text(), ' class') and
+              not(starts-with(./following::text(), ' classes'))) or
+                 (contains(text(), '-*') and
+                  starts-with(./following::text(), ' modifier'))]
+        XPATH
+          case "#{code.text}#{code.next.text}"
+          when /\Atw-|(\A|:)bg-sky-700 /
+            next
+          when /\A([-\w]+[-:\/])(\{\w+\}|\*) /
+            name = $1
+            if get_count.(path:, type: 'Modifier', name:).zero?
+              index_item.(path, code, 'Modifier', name)
+            end
+          when /\A([-\w]+) class/
+            name = $1
+            if get_count.(path:, type: 'Class', name:).zero?
+              index_item.(path, code, 'Class', name)
             end
           end
         end
@@ -487,14 +520,6 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
 
   insert.close
 
-  get_count = ->(**criteria) do
-    db.get_first_value(<<-SQL, criteria.values)
-      SELECT COUNT(*) from searchIndex where #{
-        criteria.each_key.map { |column| "#{column} = ?" }.join(' and ')
-      }
-    SQL
-  end
-
   assert_exists = ->(**criteria) do
     if get_count.(**criteria).zero?
       raise "#{criteria.inspect} not found in index!"
@@ -509,11 +534,23 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
       'p-0.5',
       'pl-5',
       'space-x-0 > * + *',
+      'dark',
+      'prose',
       'prose-base',
+      'prose-invert',
+      'not-prose',
     ],
     'Modifier' => [
       'sm:',
+      'dark:',
       'hover:',
+      'peer-',
+      'peer/',
+      'group-',
+      'group/',
+      'supports-',
+      'data-',
+      'aria-',
       'prose-a:',
     ],
     'Property' => [
