@@ -691,19 +691,25 @@ task :push => DUC_WORKDIR do
 
     sh paginate_command(%W[git diff #{json_path}], diff: true)
 
-    sh 'git', 'add', *[archive, versioned_archive, docset_json].map { |path|
-      path.relative_path_from(workdir).to_s
-    }
-    sh 'git', 'commit', '-m', "Update #{DOCSET_NAME} docset to #{version}"
-    sh 'git', 'push', '-fu', 'origin', "#{DUC_BRANCH}:#{DUC_BRANCH}"
-
-    last_version = specific_versions.dig(1, 'version')
-    puts "Diff to the latest version #{last_version}:"
-    sh({ 'PREVIOUS_VERSION' => last_version }, paginate_command("rake diff:index", diff: true))
-
-    puts "New docset is committed and pushed to #{DUC_OWNER}:#{DUC_BRANCH}.  To send a PR, go to the following URL:"
-    puts "\t" + "#{DUC_REPO_UPSTREAM.delete_suffix(".git")}/compare/master...#{DUC_OWNER}:#{DUC_BRANCH}?expand=1"
+    sh(*%W[git add], *[archive, versioned_archive, docset_json].map { |path| path.relative_path_from(workdir).to_s })
+    sh(*%W[git commit -m #{"Update #{DOCSET_NAME} docset to #{version}"}])
+    sh(*%W[git push -fu origin #{DUC_BRANCH}:#{DUC_BRANCH}])
   end
+
+  sh(*%W[gh release create v#{version} -t v#{version} -n #{<<~NOTES} -- #{archive}])
+    This docset is generated from the official documentation of Tailwind CSS.
+
+    #{DOCS_URI}
+
+    Copyright (C) #{Time.now.year} Tailwind Labs Inc.
+  NOTES
+
+  last_version = specific_versions.dig(1, 'version')
+  puts "Diff to the latest version #{last_version}:"
+  sh({ 'PREVIOUS_VERSION' => last_version }, paginate_command("rake diff:index", diff: true))
+
+  puts "New docset is committed and pushed to #{DUC_OWNER}:#{DUC_BRANCH}.  To send a PR, go to the following URL:"
+  puts "\t" + "#{DUC_REPO_UPSTREAM.delete_suffix(".git")}/compare/master...#{DUC_OWNER}:#{DUC_BRANCH}?expand=1"
 end
 
 desc 'Send a pull-request'
