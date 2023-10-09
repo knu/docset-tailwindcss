@@ -713,7 +713,7 @@ task :pr => DUC_WORKDIR do
       if ok
         puts "Nothing to send a pull-request for."
       else
-        sh 'hub', 'pull-request', '-b', "#{DUC_OWNER_UPSTREAM}:master", '-h', "#{DUC_OWNER}:#{DUC_BRANCH}", '-m', `git log -1 --pretty=%s #{DUC_BRANCH}`.chomp
+        sh(*%W[gh pr create -B #{DUC_OWNER_UPSTREAM}:master -H #{DUC_OWNER}:#{DUC_BRANCH} -t #{`git log -1 --pretty=%s #{DUC_BRANCH}`.chomp}])
       end
     end
   end
