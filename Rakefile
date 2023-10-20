@@ -72,6 +72,8 @@ ICON_SITE_URI = URI('https://tailwindcss.com/brand')
 ICON_FILE = Pathname('icon.png')
 COMMON_CSS = Pathname('common.css')
 COMMON_CSS_URL = DOCS_URI + COMMON_CSS.basename.to_s
+COMMON_JS = Pathname('common.js')
+COMMON_JS_URL = DOCS_URI + COMMON_JS.basename.to_s
 FETCH_LOG = 'wget.log'
 DUC_OWNER = 'knu'
 DUC_REPO = "git@github.com:#{DUC_OWNER}/Dash-User-Contributions.git"
@@ -356,7 +358,7 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
 
   puts 'Indexing documents'
 
-  cp COMMON_CSS, File.join(DOCS_ROOT, HOST_URI.route_to(DOCS_URI).to_s)
+  cp [COMMON_CSS, COMMON_JS], File.join(DOCS_ROOT, HOST_URI.route_to(DOCS_URI).to_s)
 
   cd DOCS_ROOT do
     sha1sums = {}
@@ -399,6 +401,8 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
       doc.at('head') << Nokogiri::XML::Node.new('link', doc).tap { |link|
         link['rel'] = 'stylesheet'
         link['href'] = uri.route_to(COMMON_CSS_URL)
+      } << Nokogiri::XML::Node.new('script', doc).tap { |link|
+        link['src'] = uri.route_to(COMMON_JS_URL)
       }
 
       doc.css('.absolute.hidden').each(&:remove) # anchors
