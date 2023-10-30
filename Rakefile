@@ -3,6 +3,7 @@
 require 'bundler/setup'
 Bundler.require
 
+require 'brotli'
 require 'digest'
 require 'json'
 require 'pathname'
@@ -514,9 +515,15 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
     Dir.glob("**/*.css") do |path|
       uri = HOST_URI + path
 
+      content = File.read(path)
+      if !content.valid_encoding?
+        puts "Deflating #{path} with Brotli"
+        content = Brotli.inflate(content)
+      end
+
       File.write(
         path,
-        File.read(path).gsub(%r{url\((['"]?)\K.*?(?=\1\))}) { |href|
+        content.gsub(%r{url\((['"]?)\K.*?(?=\1\))}) { |href|
           resolve_url.(href, uri)
         }
       )
