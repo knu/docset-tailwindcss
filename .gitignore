@@ -5,6 +5,8 @@ Gemfile.lock
 *.tgz
 icon.png
 tailwindcss.com/
+play.tailwindcss.com/
+images.unsplash.com/
 wget.log
 Dash-User-Contributions/
 tmp/
