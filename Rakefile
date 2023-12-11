@@ -68,6 +68,7 @@ DOCS_ROOT = File.join(DOCSET, ROOT_RELPATH)
 DOCS_INDEX = File.join(DOCSET, INDEX_RELPATH)
 DOCS_URI = URI('https://tailwindcss.com/docs/')
 HOST_URI = DOCS_URI + '/'
+DOCS_HOST = DOCS_URI.host
 DOCS_DIR = Pathname(DOCS_URI.host)
 ICON_SITE_URI = URI('https://tailwindcss.com/brand')
 ICON_FILE = Pathname('icon.png')
@@ -76,6 +77,7 @@ COMMON_CSS_URL = DOCS_URI + COMMON_CSS.basename.to_s
 COMMON_JS = Pathname('common.js')
 COMMON_JS_URL = DOCS_URI + COMMON_JS.basename.to_s
 FETCH_LOG = 'wget.log'
+ASSET_HOSTS = %w[images.unsplash.com]
 DUC_OWNER = 'knu'
 DUC_REPO = "git@github.com:#{DUC_OWNER}/Dash-User-Contributions.git"
 DUC_OWNER_UPSTREAM = 'Kapeli'
@@ -210,8 +212,15 @@ namespace :fetch do
     sh *%W[
       wget -nv --mirror --no-parent -p --append-output #{FETCH_LOG}
       --reject-regex=(/what_a_rush\\.png|/img/hero-pattern\\.svg)$
+      --span-hosts --domains=#{[DOCS_HOST, *ASSET_HOSTS].join(',')}
       #{DOCS_URI}
     ]
+
+    # external hosts as subdirectories
+    ASSET_HOSTS.each do |host|
+      rm_rf "#{DOCS_DIR}/#{host}"
+      cp_r host, DOCS_DIR
+    end
 
     Dir.glob("#{DOCS_DIR}/**/*") do |path|
       next unless File.file?(path)
@@ -339,6 +348,14 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
       end
       warn e.message if bad_hrefs.add?(href)
       return href
+    end
+
+    case abs.host
+    when *ASSET_HOSTS
+      # external hosts as subdirectories
+      auri = HOST_URI.dup
+      auri.path = "/#{abs.host}#{abs.request_uri}".gsub(/[?]/) { |s| CGI.escape(s) }
+      return uri.route_to(auri)
     end
 
     rel = HOST_URI.route_to(abs)
@@ -738,7 +755,7 @@ end
 
 desc 'Delete all fetched files and generated files'
 task :clean do
-  rm_rf [DOCS_DIR, ICON_FILE, DOCSET, DOCSET_ARCHIVE, FETCH_LOG]
+  rm_rf [DOCS_DIR, *ASSET_HOSTS, ICON_FILE, DOCSET, DOCSET_ARCHIVE, FETCH_LOG]
 end
 
 task :default => :build
