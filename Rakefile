@@ -225,14 +225,25 @@ namespace :fetch do
     Dir.glob("#{DOCS_DIR}/**/*") do |path|
       next unless File.file?(path)
 
-      if !path.end_with?('.html') &&
-          File.open(path) { |f| f.read(255).match?(/<!DOCTYPE html>/i) }
+      head = File.open(path) { |f| f.read(4096) }
+
+      if path.end_with?('.html')
+        # ok
+      elsif head.match?(/<!DOCTYPE html>/i)
         path_with_suffix = path + '.html'
         if File.file?(path_with_suffix)
           rm path
+          next
         else
           mv path, path_with_suffix
+          path = path_with_suffix
         end
+      else
+        next
+      end
+
+      if head.match?(%r{<meta [^>]*\bhttps://tailwindui\.com\b})
+        rm path
       end
     end
   end
