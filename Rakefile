@@ -735,6 +735,9 @@ task :push => DUC_WORKDIR do
     sh(*%W[git push -fu origin #{DUC_BRANCH}:#{DUC_BRANCH}])
   end
 
+  sh "git tag -d v#{version} 2>/dev/null || :"
+  sh "git push origin -d v#{version} 2>/dev/null || :"
+
   sh(*%W[gh release create v#{version} -t v#{version} -n #{<<~NOTES} -- #{archive}])
     This docset is generated from the official documentation of Tailwind CSS.
 
