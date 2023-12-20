@@ -365,7 +365,7 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
     when *ASSET_HOSTS
       # external hosts as subdirectories
       auri = HOST_URI.dup
-      auri.path = "/#{abs.host}#{abs.request_uri}".gsub(/[?]/) { |s| CGI.escape(s) }
+      auri.path = "/#{abs.host}#{abs.request_uri}".gsub(/[?]|%(?!3D)/) { |s| CGI.escape(s) }
       return uri.route_to(auri)
     end
 
