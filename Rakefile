@@ -59,6 +59,38 @@ def read_table(table, &)
   nil
 end
 
+def existing_pull_url
+  repo = URI(DUC_REPO_UPSTREAM).path[%r{\A/\K.+(?=\.git\z)}]
+  query = "repo:#{repo} is:pr author:#{DUC_OWNER} head:#{DUC_BRANCH} is:open"
+  graphql = <<~GRAPHQL
+    query($q: String!) {
+      search(
+        query: $q
+        type: ISSUE
+        last: 1
+      ) {
+        edges {
+          node {
+            ... on PullRequest {
+              number
+              url
+              headRepository {
+                nameWithOwner
+              }
+              headRefName
+            }
+          }
+        }
+      }
+    }
+  GRAPHQL
+  jq = '.data.search.edges.[0].node.url'
+
+  IO.popen(%W[gh api graphql -f q=#{query} -f query=#{graphql} --jq=#{jq}]) { |io|
+    io.read.chomp[%r{\Ahttps://.*}]
+  }
+end
+
 DOCSET_NAME = 'Tailwind CSS'
 DOCSET = "#{DOCSET_NAME.tr(' ', '_')}.docset"
 DOCSET_ARCHIVE = File.basename(DOCSET, '.docset') + '.tgz'
@@ -731,8 +763,14 @@ task :push => DUC_WORKDIR do
     sh paginate_command(%W[git diff #{json_path}], diff: true)
 
     sh(*%W[git add], *[archive, versioned_archive, docset_json].map { |path| path.relative_path_from(workdir).to_s })
-    sh(*%W[git commit -m #{"Update #{DOCSET_NAME} docset to #{version}"}])
+    message = "Update #{DOCSET_NAME} docset to #{version}"
+    sh(*%W[git commit -m #{message}])
     sh(*%W[git push -fu origin #{DUC_BRANCH}:#{DUC_BRANCH}])
+
+    if pull_url = existing_pull_url
+      puts "Updating the title of the existing pull-request: #{pull_url}"
+      sh(*%W[gh pr edit #{pull_url} --title #{message}])
+    end
   end
 
   unless `git tag -l v#{version}`.empty?
