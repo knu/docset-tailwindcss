@@ -60,7 +60,7 @@ def read_table(table, &)
 end
 
 def existing_pull_url
-  repo = URI(DUC_REPO_UPSTREAM).path[%r{\A/\K.+(?=\.git\z)}]
+  repo = "#{DUC_OWNER_UPSTREAM}/#{DUC_REPO}"
   query = "repo:#{repo} is:pr author:#{DUC_OWNER} head:#{DUC_BRANCH} is:open"
   graphql = <<~GRAPHQL
     query($q: String!) {
@@ -110,11 +110,13 @@ COMMON_JS = Pathname('common.js')
 COMMON_JS_URL = DOCS_URI + COMMON_JS.basename.to_s
 FETCH_LOG = 'wget.log'
 ASSET_HOSTS = %w[spotlight.tailwindui.com images.unsplash.com]
+DUC_REPO = 'Dash-User-Contributions'
 DUC_OWNER = 'knu'
-DUC_REPO = "git@github.com:#{DUC_OWNER}/Dash-User-Contributions.git"
+DUC_REMOTE_URL = "git@github.com:#{DUC_OWNER}/#{DUC_REPO}.git"
 DUC_OWNER_UPSTREAM = 'Kapeli'
-DUC_REPO_UPSTREAM = "https://github.com/#{DUC_OWNER_UPSTREAM}/Dash-User-Contributions.git"
-DUC_WORKDIR = File.basename(DUC_REPO, '.git')
+DUC_REMOTE_URL_UPSTREAM = "https://github.com/#{DUC_OWNER_UPSTREAM}/#{DUC_REPO}.git"
+DUC_WORKDIR = DUC_REPO
+DUC_DEFAULT_BRANCH = 'master'
 DUC_BRANCH = 'tailwindcss'
 
 URI_ATTRS = [
@@ -702,9 +704,9 @@ namespace :diff do
 end
 
 file DUC_WORKDIR do |t|
-  sh 'git', 'clone', DUC_REPO, t.name
+  sh 'git', 'clone', DUC_REMOTE_URL, t.name
   cd t.name do
-    sh 'git', 'remote', 'add', 'upstream', DUC_REPO_UPSTREAM
+    sh 'git', 'remote', 'add', 'upstream', DUC_REMOTE_URL_UPSTREAM
     sh 'git', 'remote', 'update', 'upstream'
   end
 end
@@ -725,9 +727,9 @@ task :push => DUC_WORKDIR do
     sh 'git', 'rev-parse', '--verify', '--quiet', DUC_BRANCH do |ok,|
       if ok
         sh 'git', 'checkout', DUC_BRANCH
-        sh 'git', 'reset', '--hard', 'upstream/master'
+        sh 'git', 'reset', '--hard', "upstream/#{DUC_DEFAULT_BRANCH}"
       else
-        sh 'git', 'checkout', '-b', DUC_BRANCH, 'upstream/master'
+        sh 'git', 'checkout', '-b', DUC_BRANCH, "upstream/#{DUC_DEFAULT_BRANCH}"
       end
     end
   end
@@ -791,17 +793,22 @@ task :push => DUC_WORKDIR do
   sh({ 'PREVIOUS_VERSION' => last_version }, paginate_command("rake diff:index", diff: true))
 
   puts "New docset is committed and pushed to #{DUC_OWNER}:#{DUC_BRANCH}.  To send a PR, go to the following URL:"
-  puts "\t" + "#{DUC_REPO_UPSTREAM.delete_suffix(".git")}/compare/master...#{DUC_OWNER}:#{DUC_BRANCH}?expand=1"
+  puts "\t" + "#{DUC_REMOTE_URL_UPSTREAM.delete_suffix(".git")}/compare/#{DUC_DEFAULT_BRANCH}...#{DUC_OWNER}:#{DUC_BRANCH}?expand=1"
 end
 
 desc 'Send a pull-request'
 task :pr => DUC_WORKDIR do
   cd DUC_WORKDIR do
-    sh(*%W[git diff --exit-code --stat #{DUC_BRANCH}..upstream/master]) do |ok, _res|
+    sh(*%W[git diff --exit-code --stat #{DUC_BRANCH}..upstream/#{DUC_DEFAULT_BRANCH}]) do |ok, _res|
       if ok
         puts "Nothing to send a pull-request for."
       else
-        sh(*%W[gh pr create -B #{DUC_OWNER_UPSTREAM}:master -H #{DUC_OWNER}:#{DUC_BRANCH} -t #{`git log -1 --pretty=%s #{DUC_BRANCH}`.chomp}])
+        sh(*%W[
+          gh pr create
+          --base #{DUC_OWNER_UPSTREAM}:#{DUC_DEFAULT_BRANCH}
+          --head #{DUC_OWNER}:#{DUC_BRANCH}
+          --title #{`git log -1 --pretty=%s #{DUC_BRANCH}`.chomp}
+        ])
       end
     end
   end
