@@ -259,7 +259,7 @@ namespace :fetch do
     Dir.glob("#{DOCS_DIR}/**/*") do |path|
       next unless File.file?(path)
 
-      head = File.open(path) { |f| f.read(4096) }
+      head = File.read(path, 4096)
 
       if path.end_with?('.html')
         # ok
@@ -276,7 +276,10 @@ namespace :fetch do
         next
       end
 
-      if head.match?(%r{<meta [^>]*\bhttps://tailwindui\.com\b})
+      case head
+      when %r{<link [^>]*\bhttps://github\.githubassets\.com\b}
+        rm path
+      when %r{<meta [^>]*\bhttps://tailwindui\.com\b}
         rm path
       end
     end
@@ -497,9 +500,6 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
           in { class: name, left_to_right:, right_to_left: }
             # https://tailwindcss.com/docs/border-radius#using-logical-properties
             # covered by the main table
-          in { class: name }
-            # https://tailwindcss.com/docs/typography-plugin
-            index_item.(path, el, 'Class', name[/\A\S+/])
           in { modifier:, media_query: }
             # covered by Pseudo-class reference
           in { modifier:, css: }
@@ -513,10 +513,6 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
               index_item.(path, el, 'Property', property_name)
               index_item.(path, el, 'Property', property)
             end
-          in { modifier:, target: }
-            # https://tailwindcss.com/docs/typography-plugin
-            modifier.sub!(/:\{utility\}\z/, '') or raise "#{path}: Unknown modifier with target: #{modifier}"
-            index_item.(path, el, 'Modifier', "#{modifier}:")
           in { breakpoint_prefix:, css: }
             # covered by Pseudo-class reference
           in { modifier: }
@@ -547,7 +543,7 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
             end
           end
         end
-      when 'docs/dark-mode.html', 'docs/hover-focus-and-other-states.html', 'docs/typography-plugin.html'
+      when 'docs/dark-mode.html', 'docs/hover-focus-and-other-states.html'
         doc.xpath(<<~XPATH).each do |code|
           //code[(starts-with(./following::text(), ' class') and
               not(starts-with(./following::text(), ' classes'))) or
@@ -609,10 +605,6 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
       'pl-5',
       'space-x-0 > * + *',
       'dark',
-      'prose',
-      'prose-base',
-      'prose-invert',
-      'not-prose',
     ],
     'Modifier' => [
       'sm:',
@@ -625,7 +617,6 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
       'supports-',
       'data-',
       'aria-',
-      'prose-a:',
     ],
     'Property' => [
       'padding-left: 1.25rem',
