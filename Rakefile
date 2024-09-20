@@ -31,6 +31,10 @@ def paginate_command(cmd, diff: false)
   end
 end
 
+def git_ref_exists?(ref)
+  system(*%W[git show-ref --quiet origin/#{DUC_BRANCH}])
+end
+
 def read_table(table, &)
   header = table.xpath('.//tr[1]')
   columns = header.xpath('.//th').map { |th|
@@ -715,13 +719,27 @@ task :push => DUC_WORKDIR do
   puts "Resetting the working directory"
   cd workdir.to_s do
     sh 'git', 'remote', 'update'
-    sh 'git', 'rev-parse', '--verify', '--quiet', DUC_BRANCH do |ok,|
-      if ok
-        sh 'git', 'checkout', DUC_BRANCH
-        sh 'git', 'reset', '--hard', "upstream/#{DUC_DEFAULT_BRANCH}"
+
+    start_ref =
+      if git_ref_exists?("origin/#{DUC_BRANCH}")
+        "origin/#{DUC_BRANCH}"
       else
-        sh 'git', 'checkout', '-b', DUC_BRANCH, "upstream/#{DUC_DEFAULT_BRANCH}"
+        "upstream/#{DUC_DEFAULT_BRANCH}"
       end
+    if git_ref_exists?(DUC_BRANCH)
+      sh 'git', 'checkout', DUC_BRANCH
+      sh 'git', 'reset', '--hard', start_ref
+    else
+      sh 'git', 'checkout', '-b', DUC_BRANCH, start_ref
+    end
+
+    base_versions, head_versions = %W[upstream/#{DUC_DEFAULT_BRANCH} HEAD].map { |branch|
+      JSON.parse(
+        capture(*%W[git cat-file -p #{branch}:#{docset_json.relative_path_from(DUC_WORKDIR)}])
+      )['specific_versions'].map { |o| o['version'] }
+    }
+    if (head_versions - base_versions - [version]).empty?
+      sh 'git', 'reset', '--hard', "upstream/#{DUC_DEFAULT_BRANCH}"
     end
   end
 
