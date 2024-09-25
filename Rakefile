@@ -362,7 +362,7 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
 
   index_item = ->(path, node, type, name) do
     index_count += 1
-    print "Indexing #{index_count} items\r" if index_count % 100 == 0
+    print "Indexing #{index_count} items\r" if !jenkins? && index_count % 100 == 0
 
     id = '//apple_ref/cpp/%s/%s' % [type, name].map { |s|
       URI.encode_www_form_component(s).gsub('+', '%20')
