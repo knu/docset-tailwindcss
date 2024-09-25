@@ -17,6 +17,10 @@ def jenkins?
   /jenkins-/.match?(ENV['BUILD_TAG'])
 end
 
+def capture(*args)
+  `#{args.flatten.shelljoin}`
+end
+
 def paginate_command(cmd, diff: false)
   case cmd
   when Array
