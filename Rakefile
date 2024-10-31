@@ -452,6 +452,7 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
 
       doc.at_css('html').then do |html|
         html.remove_class(html.classes.grep(/(?:\A|:)\[--scroll-mt:/))
+        html.remove_class('dark')
 
         html.prepend_child(Nokogiri::XML::Comment.new(doc, " Online page at #{uri} "))
       end
