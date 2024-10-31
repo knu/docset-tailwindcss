@@ -9,6 +9,12 @@ How to use
 
     % open Tailwind_CSS.docset
 
+Or to build in Docker container:
+
+    % docker build -t docset .
+    % mkdir -p output
+    # docker run -v`pwd`:/stage docset
+
 Requirements
 ------------
 
