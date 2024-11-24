@@ -183,6 +183,18 @@ def all_versions
   }.sort
 end
 
+def duc_versions(ref)
+  Rake::Task[DUC_WORKDIR].invoke
+
+  cd Pathname(DUC_WORKDIR) do
+    docset_json = Pathname('docsets') / File.basename(DOCSET, '.docset') / 'docset.json'
+
+    JSON.parse(
+      capture(*%W[git cat-file -p #{ref}:#{docset_json}])
+    )['specific_versions'].map { |o| o['version'] }
+  end
+end
+
 def build_version_info
   doc = Nokogiri::HTML5(File.read("#{DOCS_DIR}/docs/index.html"))
   dl_version = Gem::Version.new(doc.at_css('.sticky.top-0').at_xpath('.//button[starts-with(., "v")]').text[/\Av\K\d[\d.]*/])
@@ -209,14 +221,18 @@ def build_version_info
 end
 
 def previous_version
-  ENV['PREVIOUS_VERSION'] ||
-    begin
-      current_version_info = DocsetVersion.parse(File.read(File.join(built_docset, "version.json")))
+  case version = ENV['PREVIOUS_VERSION']
+  when nil, ''
+    current_version_info = DocsetVersion.parse(File.read(File.join(built_docset, "version.json")))
 
-      all_versions.reverse_each.find { |version_info|
-        version_info < current_version_info
-      }&.docset_version
-    end
+    all_versions.reverse_each.find { |version_info|
+      version_info < current_version_info
+    }&.docset_version
+  when 'published'
+    duc_versions("upstream/#{DUC_DEFAULT_BRANCH}").first
+  else
+    version
+  end
 end
 
 def previous_docset
@@ -736,12 +752,12 @@ task :push => DUC_WORKDIR do
     else
       sh 'git', 'checkout', '-b', DUC_BRANCH, start_ref
     end
+  end
 
-    base_versions, head_versions = %W[upstream/#{DUC_DEFAULT_BRANCH} HEAD].map { |branch|
-      JSON.parse(
-        capture(*%W[git cat-file -p #{branch}:#{docset_json.relative_path_from(DUC_WORKDIR)}])
-      )['specific_versions'].map { |o| o['version'] }
-    }
+  base_versions = duc_versions("upstream/#{DUC_DEFAULT_BRANCH}")
+  head_versions = duc_versions("HEAD")
+
+  cd workdir.to_s do
     if (head_versions - base_versions - [version]).empty?
       sh 'git', 'reset', '--hard', "upstream/#{DUC_DEFAULT_BRANCH}"
     end
