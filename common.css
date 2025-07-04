@@ -1,6 +1,10 @@
-table td a.dashAnchor.below-sticky-table-header {
+table td a.dashAnchor {
   display: block;
   position: relative;
-  top: -49px;
+  top: -8px;
   visibility: hidden;
+}
+
+table td a.dashAnchor.below-sticky-table-header {
+  top: -57px;
 }

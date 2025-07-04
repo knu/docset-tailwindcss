@@ -45,7 +45,7 @@ def read_table(table, &)
     th.xpath("normalize-space(.)").tr('-A-Z ', '_a-z_').to_sym
   }
 
-  # colspan has to be expanded; e.g. https://tailwindcss.com/docs/container#class-table
+  # rowspan has to be expanded; e.g. https://tailwindcss.com/docs/container#class-table
   trs = table.xpath('.//tr[./td]')
   matrix = trs.map { |tr| tr.xpath('.//td').to_a }
   expanded = Set[]
@@ -138,6 +138,18 @@ FILE_SUFFIXES = [
   '',
   '.html'
 ]
+# These assets are referenced in the docs but they return 404
+WGET_REJECT_LIST = %w(
+  /carrot.png
+  /img/checkmark.png
+  /what_a_rush.png
+  /img/clouds.svg
+  /img/mountains.jpg
+  /img/circle.png
+  /img/scribble.png
+  /img/down-arrow.svg
+  /img/up-arrow.svg
+)
 
 class DocsetVersion < Data.define(:version, :build_id, :revision, :compare_key)
   include Comparable
@@ -195,10 +207,19 @@ def duc_versions(ref)
   end
 end
 
+def last_commit_sha
+  response = `wget -qO- https://api.github.com/repos/tailwindlabs/tailwindcss.com/commits/main`
+  JSON.parse(response)['sha'] or raise 'could not fetch last commit sha'
+end
+
+def last_tailwind_version
+  response = `wget -qO- https://api.github.com/repos/tailwindlabs/tailwindcss/releases/latest`
+  JSON.parse(response)['name'].sub(/^v/, "") or raise 'could not fetch last Tailwind version'
+end
+
 def build_version_info
-  doc = Nokogiri::HTML5(File.read("#{DOCS_DIR}/docs/index.html"))
-  dl_version = Gem::Version.new(doc.at_css('.sticky.top-0').at_xpath('.//button[starts-with(., "v")]').text[/\Av\K\d[\d.]*/])
-  dl_build_id = JSON.parse(doc.at("#__NEXT_DATA__").text)["buildId"] or raise 'buildId not found'
+  dl_version = Gem::Version.new(last_tailwind_version)
+  dl_build_id = last_commit_sha
 
   revision = ENV['BUILD_REVISION']&.to_i ||
     case all_versions.take_while { |version_info| version_info.version <= dl_version }.max
@@ -269,7 +290,7 @@ namespace :fetch do
     puts 'Downloading %s' % DOCS_URI
     sh *%W[
       wget -nv --mirror --no-parent -p --append-output #{FETCH_LOG}
-      --reject-regex=(/what_a_rush\\.png|/img/hero-pattern\\.svg)$
+      --reject-regex=(#{WGET_REJECT_LIST.map { |s| s.sub(".", "\\.") }.join("|")})$
       --span-hosts --domains=#{[DOCS_HOST, *ASSET_HOSTS].join(',')}
       #{DOCS_URI}
     ]
@@ -393,7 +414,7 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
         node.at_css('th, td')
       end || node
 
-    if a_parent.at_xpath("./ancestor::table//th[contains(concat(' ', @class, ' '), ' sticky ')]")
+    if a_parent.at_xpath("./ancestor::table//thead[contains(concat(' ', @class, ' '), ' sticky ')]")
       a.add_class('below-sticky-table-header')
     end
 
@@ -480,13 +501,36 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
         end
       end
 
-      doc.css('#__next > .top-0, footer + .fixed.bottom-0').each(&:remove)
+      grid = doc.at('body > div > div > div.grid')
+      navbar, left_stripes, content, right_stripes, *footer = grid.children
+      break1, links, break2, copyright = footer
 
-      doc.css('.fixed > #nav').each do |nav|
-        content = nav.parent.next_sibling
-        nav.parent.remove
-        content.remove_class(content.classes.grep(/(?:\A|:)?pl-/))
-      end
+      navbar.remove
+      left_stripes.remove
+      right_stripes.remove
+      break1.remove
+      links.remove
+
+      grid.remove_class(grid.classes.grep(/(lg|xl):grid-cols-/))
+      grid.remove_class(grid.classes.grep(/(?:\A|:)?pt-/))
+      content.remove_class('lg:col-start-3')
+      copyright.remove_class('lg:col-start-3')
+      break2.remove_class('col-start-2')
+
+      content_grid = content.at('.grid.max-w-2xl')
+      content_grid.remove_class(content_grid.classes.grep(/^xl:grid-cols-/))
+      content_grid.remove_class(content_grid.classes.grep(/max-w-/))
+      content_grid["style"] = "max-width: 54rem"
+
+      toc = content_grid.css('.max-xl\:hidden')
+      toc.remove
+
+      color_scheme_buttons = copyright.css('[role="radiogroup"]')
+      color_scheme_buttons.children.remove
+
+      header = grid.previous_sibling
+      header.remove
+
 
       doc.at('head') << Nokogiri::XML::Node.new('link', doc).tap { |link|
         link['rel'] = 'stylesheet'
@@ -495,16 +539,23 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
         link['src'] = uri.route_to(COMMON_JS_URL)
       }
 
-      doc.css('.absolute.hidden').each(&:remove) # anchors
+      if reference = doc.at('#quick-reference')
+        if show_more = reference.at('button')
+          # Always show all classes
+          show_more.parent.remove
 
-      # Always show all classes
-      if table = doc.at_css('#class-table')
-        table.remove_class(%w[overflow-hidden])
-        table.add_class(%w[overflow-auto])
+          table = reference.at('table')
+          table["style"] = "overflow-y: auto; max-height: 26rem"
 
-        if (div = doc.at_css('.pointer-events-none.lg\\:hidden')) &&
-            div.at_xpath('.//button[starts-with(normalize-space(.), "Show")]')
-          div.remove
+          hidden_part = table.css('tbody[hidden]')
+          hidden_part.remove_attr('hidden')
+
+          # Make the header sticky
+          thead = table.at('thead')
+          tbody = table.at('tbody')
+          thead.add_class(%w(sticky top-0 bg-white border-b))
+          thead.add_class(tbody.classes.grep(/^border-\w+-\d+/))
+          tbody.remove_class('border-t')
         end
       end
 
@@ -515,33 +566,36 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
       doc.xpath('//table[.//th]').each do |table|
         read_table(table) do |row, el|
           case row
-          in { class: name, properties: }
+          in { class: name, styles: properties }
             index_item.(path, el, 'Class', name)
             properties.scan(/^\s*(([^\s:]+):\s+[^\n]+);/) do |property, property_name|
               index_item.(path, el, 'Property', property_name)
               index_item.(path, el, 'Property', property)
             end
+          in { variant:, css: }
+            # https://tailwindcss.com/docs/hover-focus-and-other-states
+            index_item.(path, el, 'Modifier', variant)
+            index_item.(path, el, 'Property', css)
+          in { namespace:, utility_classes: }
+            # https://tailwindcss.com/docs/theme
+            index_item.(path, el, 'Variable', namespace)
           in { class: name, left_to_right:, right_to_left: }
             # https://tailwindcss.com/docs/border-radius#using-logical-properties
             # covered by the main table
-          in { modifier:, media_query: }
-            # covered by Pseudo-class reference
-          in { modifier:, css: }
-            case modifier
-            when /\A([-\w]+-)\[/
-              index_item.(path, el, 'Modifier', $1)
-            else
-              index_item.(path, el, 'Modifier', "#{modifier}:")
-            end
-            css.scan(/^\s*(([^\s:]+):\s+[^\n]+);/) do |property, property_name|
-              index_item.(path, el, 'Property', property_name)
-              index_item.(path, el, 'Property', property)
-            end
+          in { utility:, description: }
+            # https://tailwindcss.com/docs/colors#using-color-utilities
+            # covered on separate pages
           in { breakpoint_prefix:, css: }
-            # covered by Pseudo-class reference
-          in { modifier: }
+            # https://tailwindcss.com/docs/responsive-design
+            # covered by https://tailwindcss.com/docs/hover-focus-and-other-states#quick-reference
+          in { variant:, media_query: }
+            # https://tailwindcss.com/docs/responsive-design
+            # covered by https://tailwindcss.com/docs/hover-focus-and-other-states#quick-reference
+          in { variant: }
             raise "Unsupported table: #{path}: #{row.inspect}"
           in { css: }
+            raise "Unsupported table: #{path}: #{row.inspect}"
+          in { styles: }
             raise "Unsupported table: #{path}: #{row.inspect}"
           else
             next
@@ -572,7 +626,7 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
           //code[(starts-with(./following::text(), ' class') and
               not(starts-with(./following::text(), ' classes'))) or
                  (contains(text(), '-*') and
-                  starts-with(./following::text(), ' modifier'))]
+                  starts-with(./following::text(), ' variant'))]
         XPATH
           case "#{code.text}#{code.next.text}"
           when /\Atw-|(\A|:)bg-sky-700 /
@@ -625,15 +679,15 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
   {
     'Class' => [
       'container',
-      'p-0.5',
-      'pl-5',
-      'space-x-0 > * + *',
+      'p-<number>',
+      'pl-px',
+      'space-x-[<value>]',
       'dark',
     ],
     'Modifier' => [
-      'sm:',
-      'dark:',
-      'hover:',
+      'sm',
+      'dark',
+      'hover',
       'peer-',
       'peer/',
       'group-',
@@ -643,15 +697,15 @@ task :build => [DOCS_DIR, ICON_FILE] do |t|
       'aria-',
     ],
     'Property' => [
-      'padding-left: 1.25rem',
-      '--tw-ring-offset-width: 2px',
-      'max-width: 768px',
-      'transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1)',
+      'padding-left: calc(var(--spacing) * <number>)',
+      '--tw-ring-shadow: 0 0 0 1px',
+      'max-width: var(--container-md)',
+      'animation-timing-function: cubic-bezier(0, 0, 0.2, 1)',
       'transform: rotate(360deg)',
       'clip: rect(0, 0, 0, 0)', # sr-only
     ],
-    'Function' => ['theme()', 'screen()'],
-    'Directive' => ['@tailwind', '@apply'],
+    'Function' => ['--spacing()', 'theme()'],
+    'Directive' => ['@import', '@apply'],
   }.each do |type, names|
     names.each do |name|
       assert_exists.(name: name, type: type)
